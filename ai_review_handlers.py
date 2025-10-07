@@ -161,7 +161,9 @@ class AIReviewHandlers:
 
     def _save_review(self, user_id: int, filename: str, result: ReviewResult) -> None:
         try:
-            coll = db.db.ai_reviews if getattr(db, "db", None) else None
+            # אל תשתמשו ב-truthiness על אובייקט DB; השוו במפורש ל-None
+            _db = getattr(db, "db", None)
+            coll = _db.ai_reviews if _db is not None else None
             if coll is None:
                 return
             coll.insert_one({
