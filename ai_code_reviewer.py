@@ -281,7 +281,7 @@ class AICodeReviewer:
                         self.openai_client.responses.create,
                         model=model,
                         input=structured_input,
-                        max_completion_tokens=1500,
+                        max_output_tokens=1500,
                         reasoning_effort="medium",
                         temperature=0.2,
                     ),
@@ -353,7 +353,7 @@ class AICodeReviewer:
                             self.openai_client.responses.create,
                             model=model,
                             input=structured_input,
-                            max_completion_tokens=1500,
+                            max_output_tokens=1500,
                         ),
                     )
                     content2 = getattr(response2, "output_text", None) or ""
