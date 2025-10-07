@@ -265,7 +265,7 @@ class AICodeReviewer:
             raise RuntimeError("OpenAI client לא זמין")
         prompt = self._build_prompt(code, filename, focus)
         loop = asyncio.get_event_loop()
-        model = (os.getenv("OPENAI_MODEL") or getattr(config, "OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini")
+        model = (os.getenv("OPENAI_MODEL") or getattr(config, "OPENAI_MODEL", "gpt-5") or "gpt-5")
         # נסה קודם את Responses API עבור מודלים מסדרת GPT-5 או אם הופעל ב-ENV
         try_responses_api = str(model).lower().startswith("gpt-5") or str(os.getenv("OPENAI_USE_RESPONSES", "")).lower() in {"1", "true", "yes"}
         if try_responses_api:
@@ -282,6 +282,8 @@ class AICodeReviewer:
                         model=model,
                         input=structured_input,
                         max_completion_tokens=1500,
+                        reasoning_effort="medium",
+                        temperature=0.2,
                     ),
                 )
                 # חילוץ טקסט
