@@ -255,11 +255,12 @@ class AICodeReviewer:
             raise RuntimeError("OpenAI client לא זמין")
         prompt = self._build_prompt(code, filename, focus)
         loop = asyncio.get_event_loop()
+        model = (os.getenv("OPENAI_MODEL") or getattr(config, "OPENAI_MODEL", "gpt-5") or "gpt-5")
         response = await loop.run_in_executor(
             None,
             partial(
                 self.openai_client.chat.completions.create,
-                model="gpt-4o-mini",
+                model=model,
                 messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
                 temperature=0.3,
                 max_tokens=1500,

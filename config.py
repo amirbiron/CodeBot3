@@ -67,6 +67,7 @@ class BotConfig:
     # AI Code Review settings
     AI_PROVIDER: str = "ollama"  # ollama/openai/claude
     OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-5"
     ANTHROPIC_API_KEY: Optional[str] = None
     OLLAMA_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "deepseek-coder:6.7b"
@@ -122,6 +123,7 @@ def load_config() -> BotConfig:
         # AI Review
         AI_PROVIDER=os.getenv('AI_PROVIDER', 'ollama'),
         OPENAI_API_KEY=os.getenv('OPENAI_API_KEY'),
+        OPENAI_MODEL=os.getenv('OPENAI_MODEL', 'gpt-5'),
         ANTHROPIC_API_KEY=os.getenv('ANTHROPIC_API_KEY'),
         OLLAMA_URL=os.getenv('OLLAMA_URL', 'http://localhost:11434'),
         OLLAMA_MODEL=os.getenv('OLLAMA_MODEL', 'deepseek-coder:6.7b'),

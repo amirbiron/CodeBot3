@@ -26,6 +26,7 @@
 - `OLLAMA_URL` — ברירת מחדל: `http://localhost:11434`.
 - `OLLAMA_MODEL` — ברירת מחדל: `deepseek-coder:6.7b`.
 - `OPENAI_API_KEY` — אם בוחרים `AI_PROVIDER=openai`.
+- `OPENAI_MODEL` — ברירת מחדל: `gpt-5` (ניתן לשנות לכל מודל נתמך בחשבון).
 - `ANTHROPIC_API_KEY` — אם בוחרים `AI_PROVIDER=claude`.
 - `AI_REVIEW_MAX_PER_DAY` — ברירת מחדל: `10`.
 - `AI_REVIEW_MAX_PER_HOUR` — ברירת מחדל: `3`.
@@ -43,6 +44,7 @@ AI_PROVIDER=ollama
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=deepseek-coder:6.7b
 # OPENAI_API_KEY=sk-...
+# OPENAI_MODEL=gpt-5
 # ANTHROPIC_API_KEY=...
 AI_REVIEW_MAX_PER_DAY=10
 AI_REVIEW_MAX_PER_HOUR=3
