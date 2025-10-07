@@ -176,35 +176,42 @@ class AIReviewHandlers:
             logger.error(f"שגיאה בשמירת סקירה: {e}")
 
     async def _display_result(self, query, filename: str, result: ReviewResult):
-        if result.summary.startswith("❌"):
-            await query.edit_message_text(result.summary)
+        from html import escape as _esc
+        if (result.summary or "").startswith("❌"):
+            await query.edit_message_text(_esc(result.summary), parse_mode=ParseMode.HTML)
             return
-        msg = f"🤖 סקירת AI: `{filename}`\n\n"
-        stars = "⭐" * max(0, int(result.score or 0))
-        msg += f"ציון: {result.score}/10 {stars}\n\n"
-        def _add_list(title: str, items: list[str], max_items: int) -> str:
+        safe_name = _esc(filename)
+        score = int(result.score or 0)
+        stars = "⭐" * max(0, score)
+        parts = []
+        parts.append(f"<b>🤖 סקירת AI:</b> <code>{safe_name}</code>")
+        parts.append(f"<b>ציון:</b> {score}/10 {stars}")
+
+        def _add_section(title: str, items: list[str], max_items: int) -> None:
             if not items:
-                return ""
-            out = title + "\n"
+                return
+            parts.append(f"<b>{_esc(title)}</b>")
             for it in items[:max_items]:
-                out += f"  • {it}\n"
+                parts.append(f"• {_esc(str(it))}")
             if len(items) > max_items:
-                out += f"  _ועוד {len(items) - max_items}..._\n"
-            return out + "\n"
-        msg += _add_list("🔴 בעיות אבטחה:", result.security_issues, 3)
-        msg += _add_list("🐛 באגים פוטנציאליים:", result.bugs, 3)
-        msg += _add_list("⚡ בעיות ביצועים:", result.performance_issues, 3)
-        msg += _add_list("📋 איכות קוד:", result.code_quality_issues, 2)
-        if result.suggestions:
-            msg += _add_list("💡 הצעות לשיפור:", result.suggestions, 3)
+                parts.append(_esc(f"ועוד {len(items) - max_items}..."))
+
+        _add_section("🔴 בעיות אבטחה:", result.security_issues, 3)
+        _add_section("🐛 באגים פוטנציאליים:", result.bugs, 3)
+        _add_section("⚡ בעיות ביצועים:", result.performance_issues, 3)
+        _add_section("📋 איכות קוד:", result.code_quality_issues, 2)
+        _add_section("💡 הצעות לשיפור:", result.suggestions, 3)
+
         if result.summary:
-            msg += f"📝 סיכום:\n{(result.summary or '')[:200]}\n\n"
-        msg += f"_סופק ע״י: {result.provider} | Tokens: {result.tokens_used}_"
+            parts.append("<b>📝 סיכום:</b>")
+            parts.append(_esc((result.summary or "")[:800]))
+
+        parts.append(_esc(f"סופק ע״י: {result.provider} | Tokens: {result.tokens_used}"))
+        msg = "\n".join(parts)
         if len(msg) > 4000:
-            # קצר — שלח טקסט בלבד כדי לא להסתבך עם קבצים בטסטים
             await query.edit_message_text("✅ הסקירה הושלמה! הדוח ארוך — קוצר לתצוגה")
         else:
-            await query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN)
+            await query.edit_message_text(msg, parse_mode=ParseMode.HTML)
 
 
 def setup_ai_review_handlers(application):
