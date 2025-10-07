@@ -269,19 +269,59 @@ class AICodeReviewer:
             )
         except Exception as e:
             msg = str(e)
-            if "max_tokens" in msg and "max_completion_tokens" in msg:
-                # מודלים חדשים דורשים max_completion_tokens במקום max_tokens
-                response = await loop.run_in_executor(
-                    None,
-                    partial(
-                        self.openai_client.chat.completions.create,
-                        model=model,
-                        messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
-                        temperature=0.3,
-                        max_completion_tokens=1500,
-                    ),
-                )
-            else:
+            need_max_completion = ("max_tokens" in msg and "max_completion_tokens" in msg)
+            unsupported_temp = ("temperature" in msg and "unsupported" in msg)
+            try:
+                if need_max_completion and unsupported_temp:
+                    response = await loop.run_in_executor(
+                        None,
+                        partial(
+                            self.openai_client.chat.completions.create,
+                            model=model,
+                            messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                            max_completion_tokens=1500,
+                        ),
+                    )
+                elif need_max_completion:
+                    # נסה עם max_completion_tokens ושמור temperature; אם עדיין נופל על temperature – נסה בלי
+                    try:
+                        response = await loop.run_in_executor(
+                            None,
+                            partial(
+                                self.openai_client.chat.completions.create,
+                                model=model,
+                                messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                                temperature=0.3,
+                                max_completion_tokens=1500,
+                            ),
+                        )
+                    except Exception as e2:
+                        if "temperature" in str(e2) and "unsupported" in str(e2):
+                            response = await loop.run_in_executor(
+                                None,
+                                partial(
+                                    self.openai_client.chat.completions.create,
+                                    model=model,
+                                    messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                                    max_completion_tokens=1500,
+                                ),
+                            )
+                        else:
+                            raise
+                elif unsupported_temp:
+                    # השמט temperature ושמור max_tokens
+                    response = await loop.run_in_executor(
+                        None,
+                        partial(
+                            self.openai_client.chat.completions.create,
+                            model=model,
+                            messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                            max_tokens=1500,
+                        ),
+                    )
+                else:
+                    raise
+            except Exception:
                 raise
         content = response.choices[0].message.content
         tokens_used = int(getattr(getattr(response, "usage", None), "total_tokens", 0) or 0)
