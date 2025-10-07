@@ -63,6 +63,16 @@ class BotConfig:
     DRIVE_ADD_HASH: bool = False
     # נרמול קוד לפני שמירה (הסרה/ניקוי תווים נסתרים)
     NORMALIZE_CODE_ON_SAVE: bool = True
+
+    # AI Code Review settings
+    AI_PROVIDER: str = "ollama"  # ollama/openai/claude
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-5"
+    ANTHROPIC_API_KEY: Optional[str] = None
+    OLLAMA_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "deepseek-coder:6.7b"
+    AI_REVIEW_MAX_PER_DAY: int = 10
+    AI_REVIEW_MAX_PER_HOUR: int = 3
     
     def __post_init__(self):
         if self.SUPPORTED_LANGUAGES is None:
@@ -110,6 +120,15 @@ def load_config() -> BotConfig:
         PUBLIC_BASE_URL=os.getenv('PUBLIC_BASE_URL'),
         WEBAPP_URL=os.getenv('WEBAPP_URL'),
         RECYCLE_TTL_DAYS=int(os.getenv('RECYCLE_TTL_DAYS', '7') or '7'),
+        # AI Review
+        AI_PROVIDER=os.getenv('AI_PROVIDER', 'ollama'),
+        OPENAI_API_KEY=os.getenv('OPENAI_API_KEY'),
+        OPENAI_MODEL=os.getenv('OPENAI_MODEL', 'gpt-5'),
+        ANTHROPIC_API_KEY=os.getenv('ANTHROPIC_API_KEY'),
+        OLLAMA_URL=os.getenv('OLLAMA_URL', 'http://localhost:11434'),
+        OLLAMA_MODEL=os.getenv('OLLAMA_MODEL', 'deepseek-coder:6.7b'),
+        AI_REVIEW_MAX_PER_DAY=int(os.getenv('AI_REVIEW_MAX_PER_DAY', '10')),
+        AI_REVIEW_MAX_PER_HOUR=int(os.getenv('AI_REVIEW_MAX_PER_HOUR', '3')),
     )
 
 # יצירת אינסטנס גלובלי של הקונפיגורציה
