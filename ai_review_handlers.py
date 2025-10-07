@@ -40,7 +40,12 @@ class AIReviewHandlers:
     def setup_handlers(self):
         self.application.add_handler(CommandHandler("ai_review", self.ai_review_command))
         self.application.add_handler(CommandHandler("ai_quota", self.ai_quota_command))
-        self.application.add_handler(CallbackQueryHandler(self.handle_review_callback, pattern=r"^ai_review:"))
+        # קבוצה גבוהה כדי לעקוף את ה-handler הגלובלי שתופס הכל
+        try:
+            self.application.add_handler(CallbackQueryHandler(self.handle_review_callback, pattern=r"^ai_review:"), group=-5)
+        except Exception:
+            # fallback ללא group אם הסביבה לא תומכת
+            self.application.add_handler(CallbackQueryHandler(self.handle_review_callback, pattern=r"^ai_review:"))
 
     async def ai_review_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
