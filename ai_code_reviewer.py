@@ -255,17 +255,34 @@ class AICodeReviewer:
             raise RuntimeError("OpenAI client לא זמין")
         prompt = self._build_prompt(code, filename, focus)
         loop = asyncio.get_event_loop()
-        model = (os.getenv("OPENAI_MODEL") or getattr(config, "OPENAI_MODEL", "gpt-5") or "gpt-5")
-        response = await loop.run_in_executor(
-            None,
-            partial(
-                self.openai_client.chat.completions.create,
-                model=model,
-                messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=1500,
-            ),
-        )
+        model = (os.getenv("OPENAI_MODEL") or getattr(config, "OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini")
+        try:
+            response = await loop.run_in_executor(
+                None,
+                partial(
+                    self.openai_client.chat.completions.create,
+                    model=model,
+                    messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_tokens=1500,
+                ),
+            )
+        except Exception as e:
+            msg = str(e)
+            if "max_tokens" in msg and "max_completion_tokens" in msg:
+                # מודלים חדשים דורשים max_completion_tokens במקום max_tokens
+                response = await loop.run_in_executor(
+                    None,
+                    partial(
+                        self.openai_client.chat.completions.create,
+                        model=model,
+                        messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                        temperature=0.3,
+                        max_completion_tokens=1500,
+                    ),
+                )
+            else:
+                raise
         content = response.choices[0].message.content
         tokens_used = int(getattr(getattr(response, "usage", None), "total_tokens", 0) or 0)
         res = self._parse_ai_response(content, AIProvider.OPENAI.value)
