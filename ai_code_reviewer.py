@@ -270,12 +270,17 @@ class AICodeReviewer:
         try_responses_api = str(model).lower().startswith("gpt-5") or str(os.getenv("OPENAI_USE_RESPONSES", "")).lower() in {"1", "true", "yes"}
         if try_responses_api:
             try:
+                # מבנה input מומלץ ל-Responses: input כ-list של content blocks (type=input_text)
+                structured_input = [
+                    {"role": "system", "content": [{"type": "input_text", "text": "אתה מומחה לסקירת קוד"}]},
+                    {"role": "user", "content": [{"type": "input_text", "text": prompt}]},
+                ]
                 response = await loop.run_in_executor(
                     None,
                     partial(
                         self.openai_client.responses.create,
                         model=model,
-                        input=prompt,
+                        input=structured_input,
                         max_completion_tokens=1500,
                     ),
                 )
@@ -336,12 +341,16 @@ class AICodeReviewer:
             # נסה Responses API אם נראה שהמודל דורש זאת
             if need_max_completion or unsupported_temp:
                 try:
+                    structured_input = [
+                        {"role": "system", "content": [{"type": "input_text", "text": "אתה מומחה לסקירת קוד"}]},
+                        {"role": "user", "content": [{"type": "input_text", "text": prompt}]},
+                    ]
                     response2 = await loop.run_in_executor(
                         None,
                         partial(
                             self.openai_client.responses.create,
                             model=model,
-                            input=prompt,
+                            input=structured_input,
                             max_completion_tokens=1500,
                         ),
                     )
