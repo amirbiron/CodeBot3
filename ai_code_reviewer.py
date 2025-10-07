@@ -335,16 +335,45 @@ class AICodeReviewer:
                 raise
         content = response.choices[0].message.content
         tokens_used = int(getattr(getattr(response, "usage", None), "total_tokens", 0) or 0)
-        # Fallback: אם לא התקבל תוכן כלל מהמודל
+        # Fallback: אם לא התקבל תוכן כלל מהמודל — נסה מודל חלופי בטוח (gpt-4o-mini)
         if not (str(content or "").strip()):
-            r = ReviewResult(provider=AIProvider.OPENAI.value, focus=focus.value)
-            r.tokens_used = tokens_used
-            r.summary = "לא התקבלה תשובה מהמודל. נסה שוב או בחר מודל אחר (למשל gpt-4o-mini)."
-            r.suggestions = [
-                "נסה להריץ שוב את הסקירה",
-                "החלף OPENAI_MODEL למודל נתמך (למשל gpt-4o-mini)",
-            ]
-            return r
+            alt_model = "gpt-4o-mini"
+            try:
+                alt_response = await loop.run_in_executor(
+                    None,
+                    partial(
+                        self.openai_client.chat.completions.create,
+                        model=alt_model,
+                        messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
+                        max_completion_tokens=1500,
+                    ),
+                )
+                alt_content = alt_response.choices[0].message.content
+                if str(alt_content or "").strip():
+                    content = alt_content
+                    # נסה לעדכן גם מונה טוקנים אם קיים
+                    try:
+                        tokens_used = int(getattr(getattr(alt_response, "usage", None), "total_tokens", 0) or tokens_used)
+                    except Exception:
+                        pass
+                else:
+                    r = ReviewResult(provider=AIProvider.OPENAI.value, focus=focus.value)
+                    r.tokens_used = tokens_used
+                    r.summary = "לא התקבלה תשובה מהמודל. נסה שוב או הגדר OPENAI_MODEL=gpt-4o-mini."
+                    r.suggestions = [
+                        "נסה להריץ שוב את הסקירה",
+                        "החלף OPENAI_MODEL למודל נתמך (למשל gpt-4o-mini)",
+                    ]
+                    return r
+            except Exception:
+                r = ReviewResult(provider=AIProvider.OPENAI.value, focus=focus.value)
+                r.tokens_used = tokens_used
+                r.summary = "שגיאה בקריאה למודל. מומלץ להגדיר OPENAI_MODEL=gpt-4o-mini ולנסות שוב."
+                r.suggestions = [
+                    "בדוק שהמפתח תקין והרשאות עומדות",
+                    "החלף OPENAI_MODEL ל-gpt-4o-mini",
+                ]
+                return r
         res = self._parse_ai_response(content, AIProvider.OPENAI.value)
         res.tokens_used = tokens_used
         return res
