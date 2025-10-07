@@ -1,4 +1,4 @@
-"""
+THIS SHOULD BE A LINTER ERROR"""
 Handlers לפקודות AI Code Review בבוט Telegram.
 מותאם לקוד ול-DB הקיימים בריפו.
 """
@@ -117,6 +117,21 @@ class AIReviewHandlers:
         except Exception:
             pass
         await self._display_result(query, filename, result)
+
+    async def ai_quota_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הצגת מכסת סקירות נותרת למשתמש."""
+        user_id = update.effective_user.id
+        try:
+            quota = ai_reviewer.rate_limiter.get_remaining_quota(user_id)
+        except Exception:
+            quota = {"daily": 0, "hourly": 0}
+        msg = (
+            "📊 *מכסת סקירות AI*\n\n"
+            f"🕐 נותר היום: *{quota.get('daily', 0)}* סקירות\n"
+            f"⏱ נותר בשעה: *{quota.get('hourly', 0)}* סקירות\n\n"
+            "_המכסה מתאפסת כל 24 שעות_"
+        )
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
     def _save_review(self, user_id: int, filename: str, result: ReviewResult) -> None:
         try:
