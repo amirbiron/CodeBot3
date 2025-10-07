@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERROR"""
+"""
 Handlers לפקודות AI Code Review בבוט Telegram.
 מותאם לקוד ול-DB הקיימים בריפו.
 """
