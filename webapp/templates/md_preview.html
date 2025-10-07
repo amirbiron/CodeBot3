@@ -1,0 +1,727 @@
+{% extends "base.html" %}
+
+{% block title %}{{ file.file_name }} - Markdown Preview{% endblock %}
+
+{% block extra_css %}
+<style>
+/* אזור התצוגה והביצועים */
+#md-root {
+  /* הרחבת אזור התוכן הלבן לצדדים והרחקה מהשוליים הסגולים */
+  max-width: min(1600px, 100vw);
+  margin: 0 auto;
+  padding: 0.5rem 0; /* את הריווח הצדדי ניתן דרך הכרטיס הפנימי */
+}
+#md-content {
+  background: #ffffff;
+  color: #111111;
+  border-radius: 12px;
+  border: none; /* ביטול מסגרת (שנתפסה כ"סגולה") */
+  padding: 14px; /* ריווח אחיד ועדין – לא מרחיק את הבלוק מהגבול */
+}
+/* במסך מלא – לאפשר גלילה בתוך הכרטיס עצמו (תמיכה גם ב-WebKit) */
+#mdCard:fullscreen { height: 100vh; overflow: auto; }
+#mdCard:-webkit-full-screen { height: 100vh; overflow: auto; }
+#md-content img {
+  max-width: 100%;
+  height: auto;
+}
+/* הרחבת הקונטיינר בעמוד Markdown כדי לצמצם את הסגול בצדדים */
+.main-content > .container {
+  /* מכולה רחבה כדי לצמצם "סגול" בצדדים */
+  max-width: 100% !important;
+  width: 100% !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+/* בעמוד Markdown בלבד: צמצום הפס הסגול משמאל – מרחיבים את הכרטיס שמאלה */
+.main-content .glass-card {
+  margin-left: 0 !important;        /* שמאל קרוב יותר לקצה */
+  margin-right: 0.5rem !important;  /* שומרים על ימין קיים */
+  width: calc(100% - 0.5rem) !important;
+}
+/* טבלאות בסגנון GitHub */
+#md-content table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: auto;
+  display: block;
+}
+#md-content table th, #md-content table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+}
+#md-content table thead {
+  background: #f8fafc;
+}
+/* קוד (fenced) */
+#md-content pre code,
+#md-content pre > code,
+#md-content code.hljs {
+  display: block;
+  /* נשמור על ריווח מינימלי בתוך תגית הקוד עצמה – דק שלא יבטל הדגשות */
+  padding: 0 2px 0 0;            /* תוספת עדינה מימין ב-RTL */
+  border-radius: 8px;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 16px;               /* נגישות טובה יותר */
+  line-height: 1.5;              /* רווח אנכי טוב */
+  white-space: pre-wrap !important;  /* עטיפת שורות ארוכות */
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+#md-content .md-highlight {
+  background: linear-gradient(90deg, #ffd700 0%, #ffed4e 100%);
+  color: #000;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+#md-content pre { overflow-x: auto; max-width: 100%; margin: 1rem 0; width: 100%; }
+#md-content .hljs { overflow-x: auto; display: block; }
+#md-content pre {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+  border: 0;                        /* הסרת מסגרת דקה שמצטיירת כסגולה */
+  border-radius: 12px;
+  padding: 16px;                    /* בסיס */
+  /* ריווח פנימי סימטרי בתוך הבלוק – כדי שהקוד לא ייגע בגבולות */
+  padding-right: clamp(22px, 6vw, 36px);
+  padding-left: clamp(22px, 6vw, 36px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  overflow-x: auto;
+  margin: 1em 0;                    /* אין מרווח שלילי – לא שוברים פריסה */
+  width: 100%;                      /* מילוי רוחב הכרטיס, ללא גלישה */
+  color: #e8eaed;                   /* Fallback: טקסט בהיר אם hljs לא נטען */
+  box-sizing: border-box;
+}
+#md-content pre code {
+  display: block;
+  overflow-x: auto;
+  /* ריווח עדין בתוך תגית הקוד עצמה */
+  padding: 0 2px;
+}
+#md-content {
+  /* לא נחסום גלישה כדי שלא ייחתכו מספרים/תווים מחוץ לקופסה (למשל ברשימות) */
+  overflow: visible;
+}
+/* מניעת גלישה אופקית של טקסט מחוץ לקוד/inline-code */
+#md-content p, #md-content li, #md-content blockquote {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* ברשימות ממוספרות/תבליטים ב-RTL המספר/סמל יישב בתוך הבלוק, לא מחוצה לו */
+#md-content ol, #md-content ul {
+  list-style-position: inside;
+  padding-inline-end: 0.5rem; /* מרווח קל מימין שלא יבלע את הספרות */
+}
+#md-content .code-block { position: relative; margin: 1rem 0; }
+#md-content .code-block pre {
+  margin: 0;
+  /* ריווח סימטרי בתוך הבלוק עצמו – לא משפיע על המיקום של הבלוק בדף */
+  padding: 16px;
+  padding-right: clamp(22px, 6vw, 36px);
+  padding-left: clamp(22px, 6vw, 36px);
+  padding-top: 2.6rem;           /* מקום לשורת כפתורים עליונה */
+  box-sizing: border-box;
+}
+#md-content .md-copy-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  z-index: 2;
+}
+#md-content .md-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+#md-content .md-copy-btn.copied {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: rgba(76, 175, 80, 0.6);
+}
+#md-content .md-copy-btn.copy-error {
+  background: rgba(220, 38, 38, 0.25);
+  border-color: rgba(220, 38, 38, 0.55);
+}
+#md-content .md-copy-btn::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Crect x='9' y='9' width='13' height='13' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  vertical-align: middle;
+}
+#md-content code:not(pre code) {
+  background: #f3f4f6;            /* אפור בהיר עם ניגודיות טובה על לבן */
+  color: #111111;                 /* טקסט כהה לקריאות */
+  border: 1px solid #e5e7eb;      /* מסגרת עדינה */
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}
+/* חיווי למופע פעיל בחיפוש */
+#md-content .md-highlight.is-active {
+  outline: 2px solid #ffd700;
+  outline-offset: 1px;
+}
+/* ציטוטים */
+#md-content blockquote {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #eef2f7; /* מעט כהה יותר לניגודיות טובה על לבן */
+  border-inline-start: 4px solid #cbd5e1; /* קו צד כהה במקצת */
+}
+/* שם קובץ ארוך – מניעת חריגה במסגרת הכותרת */
+#md-file-name-wrap { min-width: 0; }
+#md-file-name {
+  margin: 0;
+  font-size: 1.6rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}
+/* רשימות משימות */
+input.md-task-checkbox {
+  margin-inline-end: .5rem;
+  transform: scale(1.1);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="md-root">
+  <div class="file-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;gap:.75rem;min-width:0;">
+      <span style="font-size:2rem;">📝</span>
+      <div id="md-file-name-wrap">
+        <h1 id="md-file-name">{{ file.file_name }}</h1>
+        <div class="muted" style="margin-top:.25rem;">Markdown</div>
+      </div>
+    </div>
+  <div class="file-actions" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      {% if not is_public %}
+      <a href="#" onclick="return goBackToFile(event)" class="btn btn-secondary btn-icon">↩️ חזרה לקובץ</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="glass-card" id="mdCard" style="padding:1rem;">
+    <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.5rem;">
+      <h2 class="section-title" style="margin:0;display:flex;align-items:center;gap:.5rem;">
+        <i class="fas fa-file-alt"></i>
+        תצוגת Markdown
+      </h2>
+      <button id="mdFullscreenBtn" class="btn btn-secondary btn-icon" title="מסך מלא">
+        <i class="fas fa-expand"></i>
+        מסך מלא
+      </button>
+    </div>
+    <div class="search-bar" id="md-search" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;background:linear-gradient(135deg,#2d4a7c 0%,#3d5a8c 100%);padding:.75rem;border-radius:12px 12px 0 0;box-shadow:0 2px 8px rgba(0,0,0,0.2);margin:-16px -16px 0 -16px;">
+      <input id="mdSearchInput" type="text" placeholder="🔍 חפש בקוד..." style="flex:1 1 220px;min-width:0;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:.6rem .8rem;color:#fff;font-size:.95rem;outline:none;">
+      <span id="mdSearchCount" class="result-count" style="color:rgba(255,255,255,.9);font-size:.85rem;padding:.35rem .6rem;background:rgba(255,255,255,.12);border-radius:6px;min-width:60px;text-align:center;flex:0 0 auto;"></span>
+      <button id="mdSearchNext" type="button" class="btn btn-secondary btn-icon" title="הבא" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);flex:0 0 auto;">▶</button>
+      <button id="mdSearchClear" type="button" class="btn btn-secondary btn-icon" title="נקה" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);flex:0 0 auto;">✕</button>
+    </div>
+    <div id="md-content" style="margin-inline:-4px;width:calc(100% + 8px);"></div>
+  </div>
+  {% if not is_public %}
+  <div class="glass-card" style="margin-top: 1rem;">
+    <h2 class="section-title">
+      <i class="fas fa-share-alt"></i>
+      שיתוף
+    </h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+      <button onclick="shareToTelegramMd()" class="btn btn-secondary btn-icon">
+        <i class="fab fa-telegram"></i>
+        שתף בטלגרם
+      </button>
+      <button onclick="copyLinkMd()" class="btn btn-secondary btn-icon">
+        <i class="fas fa-link"></i>
+        העתק קישור
+      </button>
+    </div>
+  </div>
+  {% endif %}
+  <script type="application/json" id="mdText">{{ md_code | tojson | safe }}</script>
+</div>
+
+<script>
+// תוכן ה-Markdown מועבר בבטחה JSON-encoded
+const MD_TEXT = (function(){
+  try {
+    var el = document.getElementById('mdText');
+    if (!el) return "";
+    return JSON.parse(el.textContent || '""');
+  } catch(_) { return ""; }
+})();
+
+// שמירת מצב רשימות משימות (לפי קובץ) ב-localStorage
+const STORAGE_KEY = `md_tasks_state:{{ file.id }}`;
+function loadTaskState(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }catch(_){ return {}; }
+}
+function saveTaskState(state){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state || {})); }catch(_){ }
+}
+const taskState = loadTaskState();
+
+// טעינת ספריות דרך CDN
+// markdown-it + plugins (GFM-like), KaTeX, Mermaid, highlight.js
+const CDN = {
+  md: 'https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js',
+  mdEmoji: 'https://cdn.jsdelivr.net/npm/markdown-it-emoji@2.0.2/dist/markdown-it-emoji.min.js',
+  mdTask: 'https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js',
+  mdAnchor: 'https://cdn.jsdelivr.net/npm/markdown-it-anchor@8.6.7/dist/markdown-it-anchor.min.js',
+  mdFootnote: 'https://cdn.jsdelivr.net/npm/markdown-it-footnote@3.0.3/dist/markdown-it-footnote.min.js',
+  mdTocDone: 'https://cdn.jsdelivr.net/npm/markdown-it-toc-done-right@4.2.0/dist/markdown-it-toc-done-right.min.js',
+  hljs: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js',
+  hljsCss: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css',
+  katexCss: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css',
+  katexJs: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
+  katexAuto: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js',
+  mermaid: 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js'
+};
+
+function injectCss(href){ const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; document.head.appendChild(l); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+
+(async function(){
+  try{
+    injectCss(CDN.hljsCss);
+    injectCss(CDN.katexCss);
+    try { await loadScript(CDN.md); } catch(_){}
+    try { await loadScript(CDN.mdEmoji); } catch(_){}
+    try { await loadScript(CDN.mdTask); } catch(_){}
+    try { await loadScript(CDN.mdAnchor); } catch(_){}
+    try { await loadScript(CDN.mdFootnote); } catch(_){}
+    try { await loadScript(CDN.mdTocDone); } catch(_){}
+    try { await loadScript(CDN.hljs); } catch(_){}
+    try { await loadScript(CDN.katexJs); } catch(_){}
+    try { await loadScript(CDN.katexAuto); } catch(_){}
+    try { await loadScript(CDN.mermaid); } catch(_){}
+
+    const md = (window.markdownit ? window.markdownit : (()=>({render:(s)=>s})))({
+      breaks: true,
+      linkify: true,
+      typographer: true,
+      html: false,
+      // לא לבצע הדגשה בשלב ה-render של markdown-it; נבצע post-process עם hljs
+      highlight: function (_str, _lang) { return ''; }
+    })
+    if (window.markdownitEmoji) md.use(window.markdownitEmoji);
+    if (window.markdownitTaskLists) md.use(window.markdownitTaskLists, { label: true, enabled: true });
+    if (window.markdownitAnchor) md.use(window.markdownitAnchor, { permalink: true, permalinkSymbol: '¶' });
+    if (window.markdownitFootnote) md.use(window.markdownitFootnote);
+    if (window.markdownitTocDoneRight) md.use(window.markdownitTocDoneRight);
+
+    // רינדור ראשוני
+    const container = document.getElementById('md-content');
+    container.innerHTML = md.render(MD_TEXT || '');
+
+    // הדגשת תחביר לאחר הרינדור: הדגשה ממוקדת בתוך #md-content בלבד
+    try {
+      if (window.hljs) {
+        try { if (typeof window.hljs.highlightAll === 'function') window.hljs.highlightAll(); } catch(_){}
+        container.querySelectorAll('pre code').forEach(el => {
+          try {
+            if (el.classList.contains('hljs')) return;
+            var hasLang = /\blanguage-/.test(el.className || '');
+            if (hasLang && typeof window.hljs.highlightElement === 'function') {
+              window.hljs.highlightElement(el);
+            } else if (typeof window.hljs.highlightAuto === 'function') {
+              var res = window.hljs.highlightAuto(el.textContent || '');
+              el.innerHTML = res.value;
+              el.classList.add('hljs');
+            }
+          } catch(__) {}
+        });
+      }
+    } catch(_) { }
+
+    // אחרי הדגשת hljs – נשמור מקור רק לכל בלוק קוד (לא לכל הקונטיינר)
+    try {
+      const blocks = container.querySelectorAll('pre code');
+      blocks.forEach(code => {
+        if (!code.hasAttribute('data-original-html')) {
+          code.setAttribute('data-original-html', code.innerHTML);
+        }
+      });
+    } catch(_) {}
+
+    // חיפוש והדגשה בתוך קטעי קוד בלבד
+    (function(){
+      const input = document.getElementById('mdSearchInput');
+      const clearBtn = document.getElementById('mdSearchClear');
+      const nextBtn = document.getElementById('mdSearchNext');
+      const countEl = document.getElementById('mdSearchCount');
+      if (!input || !clearBtn || !countEl) return;
+      let justAutoFocused = false;
+
+      function restore() {
+        // משחזר כל בלוק קוד מהמקור שנשמר בו, בלי לגעת בשאר ה-HTML והדגשות hljs
+        const blocks = container.querySelectorAll('pre code');
+        blocks.forEach(code => {
+          try {
+            const orig = code.getAttribute('data-original-html');
+            if (orig != null) {
+              code.innerHTML = orig;
+            }
+          } catch(_) {}
+        });
+      }
+
+      function highlightTerm(term) {
+        // מדגיש רק בתוך pre > code כדי לא לשבור HTML מחוץ לקוד
+        const blocks = container.querySelectorAll('pre code');
+        let total = 0;
+        blocks.forEach(code => {
+          try {
+            const original = code.getAttribute('data-original-html') || code.innerHTML;
+            code.setAttribute('data-original-html', original);
+            if (!term) { code.innerHTML = original; return; }
+            const safe = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const rx = new RegExp(`(${safe})`, 'gi');
+            const replaced = original.replace(rx, '<span class="md-highlight">$1</span>');
+            code.innerHTML = replaced;
+            total += (original.match(rx) || []).length;
+          } catch(_) {}
+        });
+        return total;
+      }
+
+      function updateCount(n, term){
+        if (!term) { countEl.textContent = ''; return; }
+        const active = container.querySelector('.md-highlight.is-active');
+        const activeIndex = active ? (Array.from(container.querySelectorAll('.md-highlight')).indexOf(active) + 1) : 0;
+        countEl.textContent = n > 0 ? (activeIndex ? `${activeIndex}/${n}` : `${n} תוצאות`) : 'אין תוצאות';
+      }
+
+      function setActiveAndScroll(target){
+        try { container.querySelectorAll('.md-highlight.is-active').forEach(el => el.classList.remove('is-active')); } catch(_){ }
+        if (!target) return;
+        try { target.classList.add('is-active'); } catch(_){ }
+        try { target.scrollIntoView({ behavior:'smooth', block:'center' }); } catch(_){ }
+      }
+
+      function focusFirst(){
+        const first = container.querySelector('.md-highlight');
+        if (first) setActiveAndScroll(first);
+      }
+
+      function focusNext(){
+        const all = Array.from(container.querySelectorAll('.md-highlight'));
+        if (all.length === 0) return;
+        const current = container.querySelector('.md-highlight.is-active');
+        const idx = current ? all.indexOf(current) : -1;
+        const next = all[(idx + 1) % all.length];
+        setActiveAndScroll(next);
+        updateCount(all.length, input.value.trim());
+      }
+
+      input.addEventListener('input', () => {
+        const term = (input.value || '').trim();
+        restore();
+        const n = highlightTerm(term);
+        if (term && n > 0) {
+          focusFirst();
+          justAutoFocused = true;
+        }
+        updateCount(n, term);
+      });
+
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        restore();
+        updateCount(0, '');
+        justAutoFocused = false;
+      });
+
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          const term = (input.value || '').trim();
+          if (!term) return;
+          const active = container.querySelector('.md-highlight.is-active');
+          if (justAutoFocused || !active) {
+            const first = container.querySelector('.md-highlight');
+            if (first) setActiveAndScroll(first);
+            justAutoFocused = false;
+            updateCount(container.querySelectorAll('.md-highlight').length, term);
+          } else {
+            focusNext();
+          }
+        });
+      }
+
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          const all = container.querySelectorAll('.md-highlight');
+          if (all.length === 0) return;
+          if (ev.shiftKey) {
+            const arr = Array.from(all);
+            const current = container.querySelector('.md-highlight.is-active');
+            const idx = current ? arr.indexOf(current) : 0;
+            const prev = arr[(idx - 1 + arr.length) % arr.length];
+            setActiveAndScroll(prev);
+            // reset auto-focus state so forward navigation advances
+            justAutoFocused = false;
+            updateCount(arr.length, input.value.trim());
+          } else {
+            const active = container.querySelector('.md-highlight.is-active');
+            if (justAutoFocused || !active) {
+              const first = container.querySelector('.md-highlight');
+              if (first) setActiveAndScroll(first);
+              justAutoFocused = false;
+              updateCount(all.length, input.value.trim());
+            } else {
+              focusNext();
+            }
+          }
+        }
+      });
+
+      // הוסר הקוד הכפול מהמיין; נשארת רק הלוגיקה החדשה שלא מדלגת על הראשונה
+    })();
+
+    // Lazy loading לתמונות
+    container.querySelectorAll('img').forEach(img => { img.loading = 'lazy'; });
+
+    // KaTeX אוטו-רנדר (בבטחה; אין html גולמי)
+    try { if (window.renderMathInElement) window.renderMathInElement(container, { delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}] }); } catch(_){ }
+
+    // Mermaid: רנדר דיאגרמות בקוד fence ```mermaid
+    try {
+      if (!window.mermaid) throw new Error('mermaid missing');
+      window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+      const blocks = container.querySelectorAll('code.language-mermaid, pre code.language-mermaid');
+      let i=0;
+      for (const el of blocks) {
+        const parent = el.closest('pre') || el.parentElement;
+        const svgId = 'mmd_' + (++i);
+        const code = el.textContent;
+        const wrapper = document.createElement('div');
+        parent.replaceWith(wrapper);
+        try {
+          const { svg } = await window.mermaid.render(svgId, code);
+          wrapper.innerHTML = svg;
+        } catch(e) {
+          wrapper.innerHTML = '<div class="alert alert-warning">Mermaid render failed</div>';
+        }
+      }
+    } catch(_){ }
+
+    // כפתור העתקה לכל בלוק קוד (עטיפה ב-.code-block כדי לא להסתיר טקסט)
+    try {
+      const pres = Array.from(container.querySelectorAll('pre'));
+      pres.forEach(pre => {
+        let wrapper = pre.parentElement;
+        if (!wrapper || !wrapper.classList || !wrapper.classList.contains('code-block')) {
+          wrapper = document.createElement('div');
+          wrapper.className = 'code-block';
+          pre.replaceWith(wrapper);
+          wrapper.appendChild(pre);
+        }
+        // אל תיצור כפתור נוסף אם כבר קיים בתוך ה-wrapper
+        if (wrapper.querySelector('button.md-copy-btn')) {
+          return;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'md-copy-btn';
+        btn.setAttribute('aria-label', 'העתק קוד');
+        btn.title = 'העתק קוד';
+        btn.addEventListener('click', async () => {
+          const codeEl = wrapper.querySelector('code');
+          const text = codeEl ? codeEl.innerText : pre.innerText;
+          // ניקוי מצבי עבר
+          btn.classList.remove('copied');
+          btn.classList.remove('copy-error');
+          // ניסיון ראשון: Clipboard API
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.classList.add('copied');
+            setTimeout(() => { btn.classList.remove('copied'); }, 1500);
+            return;
+          } catch(_) {}
+
+          // Fallback: execCommand('copy') עם textarea זמני
+          let success = false;
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            success = document.execCommand('copy');
+            document.body.removeChild(ta);
+          } catch(_) {
+            success = false;
+          }
+
+          if (success) {
+            btn.classList.add('copied');
+            setTimeout(() => { btn.classList.remove('copied'); }, 1500);
+          } else {
+            btn.classList.add('copy-error');
+            setTimeout(() => { btn.classList.remove('copy-error'); }, 1500);
+          }
+        });
+        wrapper.appendChild(btn);
+      });
+    } catch(_){ }
+
+    // רשימות משימות אינטראקטיביות: שמירה/שחזור מצב
+    // ב-render, markdown-it-task-lists הופך ל-input[type=checkbox]
+    const boxes = container.querySelectorAll('input[type="checkbox"]');
+    let idx = 0;
+    boxes.forEach(cb => {
+      cb.classList.add('md-task-checkbox');
+      const key = 'i' + (idx++);
+      // שחזור מצב
+      if (Object.prototype.hasOwnProperty.call(taskState, key)) {
+        cb.checked = !!taskState[key];
+      }
+      cb.addEventListener('change', () => {
+        taskState[key] = cb.checked;
+        saveTaskState(taskState);
+      });
+    });
+
+    // וירטואליזציה בסיסית למסמכים ארוכים (חלוקה לקטעים לפי כותרות)
+    try {
+      const MAX_NODES = 2000;
+      const nodes = Array.from(container.childNodes);
+      if (nodes.length > MAX_NODES) {
+        const chunk = document.createDocumentFragment();
+        nodes.slice(0, MAX_NODES).forEach(n => chunk.appendChild(n));
+        const rest = nodes.slice(MAX_NODES);
+        container.innerHTML = '';
+        container.appendChild(chunk);
+        const more = document.createElement('button');
+        more.className = 'btn btn-secondary btn-icon';
+        more.textContent = 'טען עוד…';
+        more.addEventListener('click', () => {
+          const frag = document.createDocumentFragment();
+          rest.forEach(n => frag.appendChild(n));
+          container.appendChild(frag);
+          more.remove();
+        });
+        container.appendChild(document.createElement('hr'));
+        container.appendChild(more);
+      }
+    } catch(_){ }
+
+  } catch (e) {
+    console.error('Markdown preview failed', e);
+    const container = document.getElementById('md-content');
+    container.innerHTML = '<div class="alert alert-error">שגיאה ברינדור Markdown</div>';
+  }
+})();
+
+// מסך מלא ל- Markdown Card
+(function(){
+  try {
+    const btn = document.getElementById('mdFullscreenBtn');
+    const card = document.getElementById('mdCard');
+    if (!btn || !card) return;
+    function isFullscreen(){ return document.fullscreenElement === card; }
+    function updateButton(){
+      if (isFullscreen()) {
+        btn.innerHTML = '<i class="fas fa-compress"></i> יציאה ממסך מלא';
+      } else {
+        btn.innerHTML = '<i class="fas fa-expand"></i> מסך מלא';
+      }
+    }
+    btn.addEventListener('click', async function(){
+      try {
+        if (!isFullscreen()) { await card.requestFullscreen(); }
+        else { await document.exitFullscreen(); }
+      } catch(_) {}
+    });
+    document.addEventListener('fullscreenchange', updateButton);
+    updateButton();
+  } catch(_) {}
+})();
+
+// יצירת קישור ציבורי שמכוון לתצוגת Markdown (view=md)
+async function ensurePublicLinkMd(){
+  try {
+    const resp = await fetch(`/api/share/{{ file.id }}`, { method: 'POST' });
+    const data = await resp.json();
+    let baseUrl = window.location.origin;
+    let url = (data && data.ok && data.url) ? data.url : window.location.href;
+    try {
+      const u = new URL(url, window.location.origin);
+      u.searchParams.set('view', 'md');
+      return u.toString();
+    } catch(_) {
+      return url + (url.includes('?') ? '&' : '?') + 'view=md';
+    }
+  } catch (e) {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('view','md');
+      return u.toString();
+    } catch(_) {
+      return window.location.href;
+    }
+  }
+}
+
+async function copyLinkMd(){
+  const url = await ensurePublicLinkMd();
+  try { await navigator.clipboard.writeText(url); alert('הקישור הציבורי הועתק!'); }
+  catch(e){ console.error('copy failed', e); alert('לא הצלחנו להעתיק את הקישור'); }
+}
+
+async function shareToTelegramMd(){
+  const url = await ensurePublicLinkMd();
+  const text = `צפה במסמך Markdown ב-Code Keeper:\n${url}`;
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  try { window.open(telegramUrl, '_blank'); } catch(_) { window.location.href = telegramUrl; }
+}
+
+// ניווט חזרה אמין: אם יש היסטוריה – חזור; אחרת נווט ישירות לעמוד הקובץ
+function goBackToFile(ev){
+  try { if (ev) ev.preventDefault(); } catch(_){ }
+  try {
+    const sameOriginRef = document.referrer && new URL(document.referrer, window.location.origin).origin === window.location.origin;
+    if (window.history && window.history.length > 1 && sameOriginRef) {
+      window.history.back();
+      return false;
+    }
+  } catch(_){ }
+  try { window.location.replace('/file/{{ file.id }}'); } catch(_) { window.location.href = '/file/{{ file.id }}'; }
+  return false;
+}
+
+// התאמת גודל שם הקובץ: מצמצם פונט הדרגתי עד שנכנס בשורה אחת (עם מינימום מוגן)
+(function(){
+  try {
+    var el = document.getElementById('md-file-name');
+    if (!el) return;
+    el.setAttribute('title', el.textContent || '');
+    var sizeRem = 1.6;    // גודל יעד התחלתי (התואם ל-CSS)
+    var minRem = 1.0;     // מינימום – לא קטן מדי
+    el.style.fontSize = sizeRem + 'rem';
+    var guard = 0;
+    while (guard < 15 && el.scrollWidth > el.clientWidth && sizeRem > minRem) {
+      sizeRem -= 0.1;
+      el.style.fontSize = sizeRem.toFixed(2) + 'rem';
+      guard++;
+    }
+  } catch(_) { }
+})();
+</script>
+{% endblock %}
+
