@@ -266,6 +266,58 @@ class AICodeReviewer:
         prompt = self._build_prompt(code, filename, focus)
         loop = asyncio.get_event_loop()
         model = (os.getenv("OPENAI_MODEL") or getattr(config, "OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini")
+        # נסה קודם את Responses API עבור מודלים מסדרת GPT-5 או אם הופעל ב-ENV
+        try_responses_api = str(model).lower().startswith("gpt-5") or str(os.getenv("OPENAI_USE_RESPONSES", "")).lower() in {"1", "true", "yes"}
+        if try_responses_api:
+            try:
+                response = await loop.run_in_executor(
+                    None,
+                    partial(
+                        self.openai_client.responses.create,
+                        model=model,
+                        input=prompt,
+                        max_completion_tokens=1500,
+                    ),
+                )
+                # חילוץ טקסט
+                content = None
+                try:
+                    content = getattr(response, "output_text", None)
+                except Exception:
+                    content = None
+                if not content:
+                    try:
+                        output = getattr(response, "output", None)
+                        if output:
+                            first = output[0] if isinstance(output, list) else None
+                            if first is not None:
+                                try:
+                                    c0 = (getattr(first, "content", []) or [None])[0]
+                                    content = getattr(c0, "text", None)
+                                except Exception:
+                                    content = None
+                            if not content and isinstance(first, dict):
+                                content = (((first.get("content") or [{}])[0]) or {}).get("text")
+                    except Exception:
+                        content = None
+                tokens_used = 0
+                try:
+                    u = getattr(response, "usage", None)
+                    if u is not None:
+                        tokens_used = int((getattr(u, "input_tokens", 0) or 0) + (getattr(u, "output_tokens", 0) or 0))
+                except Exception:
+                    tokens_used = 0
+                if not (str(content or "").strip()):
+                    r = ReviewResult(provider=AIProvider.OPENAI.value, focus=focus.value)
+                    r.tokens_used = tokens_used
+                    r.summary = "לא התקבלה תשובה מהמודל. ודא שהמודל זמין, או נסה gpt-4o-mini."
+                    r.suggestions = ["הגדר OPENAI_MODEL=gpt-4o-mini", "בדוק הרשאות ותקינות מפתח API"]
+                    return r
+                res = self._parse_ai_response(content, AIProvider.OPENAI.value)
+                res.tokens_used = tokens_used
+                return res
+            except Exception as e:
+                logger.error(f"OpenAI Responses API failed: {e}")
         try:
             response = await loop.run_in_executor(
                 None,
@@ -281,6 +333,43 @@ class AICodeReviewer:
             msg = str(e)
             need_max_completion = ("max_tokens" in msg and "max_completion_tokens" in msg)
             unsupported_temp = ("temperature" in msg and "unsupported" in msg)
+            # נסה Responses API אם נראה שהמודל דורש זאת
+            if need_max_completion or unsupported_temp:
+                try:
+                    response2 = await loop.run_in_executor(
+                        None,
+                        partial(
+                            self.openai_client.responses.create,
+                            model=model,
+                            input=prompt,
+                            max_completion_tokens=1500,
+                        ),
+                    )
+                    content2 = getattr(response2, "output_text", None) or ""
+                    if not content2:
+                        try:
+                            output = getattr(response2, "output", None) or []
+                            if output and isinstance(output, list):
+                                first = output[0]
+                                if isinstance(first, dict):
+                                    content2 = (((first.get("content") or [{}])[0]) or {}).get("text") or ""
+                                else:
+                                    content2 = getattr(getattr(first, "content", [None])[0], "text", None) or ""
+                        except Exception:
+                            content2 = ""
+                    tokens_used2 = 0
+                    try:
+                        u = getattr(response2, "usage", None)
+                        if u is not None:
+                            tokens_used2 = int((getattr(u, "input_tokens", 0) or 0) + (getattr(u, "output_tokens", 0) or 0))
+                    except Exception:
+                        tokens_used2 = 0
+                    if str(content2 or "").strip():
+                        res2 = self._parse_ai_response(content2, AIProvider.OPENAI.value)
+                        res2.tokens_used = tokens_used2
+                        return res2
+                except Exception as e2:
+                    logger.error(f"OpenAI Responses fallback failed: {e2}")
             try:
                 if need_max_completion and unsupported_temp:
                     response = await loop.run_in_executor(
@@ -345,7 +434,7 @@ class AICodeReviewer:
                         self.openai_client.chat.completions.create,
                         model=alt_model,
                         messages=[{"role": "system", "content": "אתה מומחה לסקירת קוד"}, {"role": "user", "content": prompt}],
-                        max_completion_tokens=1500,
+                        max_tokens=1500,
                     ),
                 )
                 alt_content = alt_response.choices[0].message.content
