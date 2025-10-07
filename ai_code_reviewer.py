@@ -216,7 +216,14 @@ class AICodeReviewer:
         fmt = (
             '{"security_issues":[],"bugs":[],"performance_issues":[],"code_quality_issues":[],"suggestions":[],"score":5,"summary":""}'
         )
-        return base + "\n" + spec + "\n\nהשב בפורמט JSON בלבד:\n" + fmt
+        # דרישה מפורשת לתוכן לא ריק ב-summary כדי למנוע תשובה ריקה
+        guidelines = (
+            "\n\nהנחיות:\n"
+            "1) החזר JSON תקין בלבד.\n"
+            "2) summary חייב להכיל 2–4 משפטים.\n"
+            "3) אם אין ממצאים, הסבר מדוע והצע שתי הצעות שיפור כלליות.\n"
+        )
+        return base + "\n" + spec + guidelines + "\nהשב בפורמט JSON בלבד:\n" + fmt
 
     def _parse_ai_response(self, content: str, provider: str) -> ReviewResult:
         res = ReviewResult(provider=provider)
@@ -233,6 +240,9 @@ class AICodeReviewer:
             except Exception:
                 res.score = 0
             res.summary = str(data.get("summary", ""))
+            if not (res.summary or "").strip():
+                # אם הסיכום ריק – הצג את הטקסט הגולמי שקיבלנו (עד 800 תווים)
+                res.summary = (content or "").strip()[:800]
         except Exception:
             res.summary = content[:500]
         return res
