@@ -275,16 +275,20 @@ class AICodeReviewer:
                     {"role": "system", "content": [{"type": "input_text", "text": "אתה מומחה לסקירת קוד"}]},
                     {"role": "user", "content": [{"type": "input_text", "text": prompt}]},
                 ]
+                # בניית ארגומנטים דינמית: reasoning_effort רק ל-o1*, temperature רק אם לא o1*
+                is_o1 = str(model).lower().startswith("o1")
+                resp_args = {
+                    "model": model,
+                    "input": structured_input,
+                    "max_output_tokens": 1500,
+                }
+                if is_o1:
+                    resp_args["reasoning_effort"] = "medium"
+                else:
+                    resp_args["temperature"] = 0.2
                 response = await loop.run_in_executor(
                     None,
-                    partial(
-                        self.openai_client.responses.create,
-                        model=model,
-                        input=structured_input,
-                        max_output_tokens=1500,
-                        reasoning_effort="medium",
-                        temperature=0.2,
-                    ),
+                    partial(self.openai_client.responses.create, **resp_args),
                 )
                 # חילוץ טקסט
                 content = None
@@ -347,14 +351,19 @@ class AICodeReviewer:
                         {"role": "system", "content": [{"type": "input_text", "text": "אתה מומחה לסקירת קוד"}]},
                         {"role": "user", "content": [{"type": "input_text", "text": prompt}]},
                     ]
+                    is_o1 = str(model).lower().startswith("o1")
+                    resp_args2 = {
+                        "model": model,
+                        "input": structured_input,
+                        "max_output_tokens": 1500,
+                    }
+                    if is_o1:
+                        resp_args2["reasoning_effort"] = "medium"
+                    else:
+                        resp_args2["temperature"] = 0.2
                     response2 = await loop.run_in_executor(
                         None,
-                        partial(
-                            self.openai_client.responses.create,
-                            model=model,
-                            input=structured_input,
-                            max_output_tokens=1500,
-                        ),
+                        partial(self.openai_client.responses.create, **resp_args2),
                     )
                     content2 = getattr(response2, "output_text", None) or ""
                     if not content2:
