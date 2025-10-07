@@ -59,6 +59,7 @@ from cache_commands import setup_cache_handlers  # enabled
 # from enhanced_commands import setup_enhanced_handlers  # disabled
 from batch_commands import setup_batch_handlers
 from html import escape as html_escape
+from ai_review_handlers import setup_ai_review_handlers
 try:
     from aiohttp import web  # for internal web server
 except Exception:
@@ -919,6 +920,13 @@ class CodeKeeperBot:
         
         # --- שלב 5: טיפול בשגיאות ---
         self.application.add_error_handler(self.error_handler)
+
+        # AI Code Review handlers
+        try:
+            setup_ai_review_handlers(self.application)
+            logger.info("🤖 AI Code Review handlers נרשמו")
+        except Exception as _e:
+            logger.warning(f"AI Review handlers לא נטענו: {_e}")
     
     # start_command הוסר - ConversationHandler מטפל בפקודת /start
     
