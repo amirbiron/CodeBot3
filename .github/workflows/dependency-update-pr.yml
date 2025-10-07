@@ -1,0 +1,55 @@
+name: "📦 Monthly Dependency Update"
+
+on:
+  schedule:
+    - cron: "0 2 1 * *"
+  workflow_dispatch: {}
+  push:
+    paths:
+      - ".github/workflows/dependency-update-pr.yml"
+      - "requirements.txt"
+      - "requirements.prod.txt"
+      - "webapp/requirements.txt"
+      - "docs/requirements.txt"
+      - "constraints.txt"
+
+jobs:
+  update-deps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bump requirements (best-effort)
+        run: |
+          set -e
+          echo "Monthly dependency refresh – no-op step (Dependabot handles updates)."
+
+      - name: Refresh stamp (only schedule/manual)
+        if: ${{ github.event_name != 'push' }}
+        run: |
+          mkdir -p .github
+          echo "refreshed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .github/deps-refresh-stamp.txt
+
+      - name: Create Pull Request (skip on push)
+        if: ${{ github.event_name != 'push' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(deps): monthly dependency refresh"
+          title: "chore(deps): monthly dependency refresh"
+          body: |
+            Automated monthly dependency refresh.
+
+            - Triggers CI and Dependabot checks
+            - Please review updates and ensure tests pass
+          branch: chore/monthly-deps-refresh
+          delete-branch: true
+          signoff: true
