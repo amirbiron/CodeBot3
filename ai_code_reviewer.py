@@ -335,6 +335,16 @@ class AICodeReviewer:
                 raise
         content = response.choices[0].message.content
         tokens_used = int(getattr(getattr(response, "usage", None), "total_tokens", 0) or 0)
+        # Fallback: אם לא התקבל תוכן כלל מהמודל
+        if not (str(content or "").strip()):
+            r = ReviewResult(provider=AIProvider.OPENAI.value, focus=focus.value)
+            r.tokens_used = tokens_used
+            r.summary = "לא התקבלה תשובה מהמודל. נסה שוב או בחר מודל אחר (למשל gpt-4o-mini)."
+            r.suggestions = [
+                "נסה להריץ שוב את הסקירה",
+                "החלף OPENAI_MODEL למודל נתמך (למשל gpt-4o-mini)",
+            ]
+            return r
         res = self._parse_ai_response(content, AIProvider.OPENAI.value)
         res.tokens_used = tokens_used
         return res
