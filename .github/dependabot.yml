@@ -1,0 +1,25 @@
+# .github/dependabot.yml
+# Basic dependabot configuration for Python projects
+
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      time: "02:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    allow:
+      - dependency-type: "all"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      time: "02:15"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+  # Removed monitoring for /telegram_terminal_bot (not part of deploy scope)
+    # You can add reviewers or assignees automatically if you want
+    # assignees:
+    #   - "amirbiron"
