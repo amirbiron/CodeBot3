@@ -55,13 +55,23 @@ class AIReviewHandlers:
             )
             return
         filename = " ".join(context.args)
+        # חיפוש בקבצים רגילים
         snippet = db.get_file(user_id, filename)
-        if not snippet:
-            await update.message.reply_text(
-                f"❌ לא נמצא קובץ בשם `{filename}`", parse_mode=ParseMode.MARKDOWN
-            )
+        if isinstance(snippet, dict) and snippet:
+            await self._show_review_type_menu(update, filename, snippet.get("code") or "")
             return
-        await self._show_review_type_menu(update, filename, snippet.get("code") or "")
+        # תמיכה בקבצים גדולים: fallback אם לא נמצא בקולקציה הרגילה
+        try:
+            large = db.get_large_file(user_id, filename)
+        except Exception:
+            large = None
+        if isinstance(large, dict) and large:
+            await self._show_review_type_menu(update, filename, large.get("content") or "")
+            return
+        await update.message.reply_text(
+            f"❌ לא נמצא קובץ בשם `{filename}`", parse_mode=ParseMode.MARKDOWN
+        )
+        return
 
     async def _show_review_type_menu(self, update: Update, filename: str, code: str):
         keyboard = [
@@ -98,11 +108,22 @@ class AIReviewHandlers:
             return
         focus_str = action
         filename = ":".join(parts[2:])
+        # נסה קודם קובץ רגיל
+        code = ""
         snippet = db.get_file(user_id, filename)
-        if not snippet:
-            await query.edit_message_text("❌ הקובץ לא נמצא")
-            return
-        code = snippet.get("code") or ""
+        if isinstance(snippet, dict) and snippet:
+            code = snippet.get("code") or ""
+        else:
+            # fallback: קבצים גדולים
+            try:
+                large = db.get_large_file(user_id, filename)
+            except Exception:
+                large = None
+            if isinstance(large, dict) and large:
+                code = large.get("content") or ""
+            else:
+                await query.edit_message_text("❌ הקובץ לא נמצא")
+                return
         await query.edit_message_text(
             f"🔍 מבצע סקירת AI ({focus_str})...\n⏳ זה יכול לקחת כ-30 שניות"
         )
