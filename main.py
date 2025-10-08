@@ -106,7 +106,7 @@ logging.getLogger("telegram.ext.Application").setLevel(logging.WARNING)
 # יצירת אובייקט reporter גלובלי
 reporter = create_reporter(
     mongodb_uri=(os.getenv('REPORTER_MONGODB_URL') or os.getenv('REPORTER_MONGODB_URI') or config.MONGODB_URL),
-    service_id=os.getenv('REPORTER_SERVICE_ID', 'srv-d29d72adbo4c73bcuep0'),
+    service_id=os.getenv('REPORTER_SERVICE_ID', 'srv-d3ilh4vfte5s7392s000'),
     service_name="CodeBot"
 )
 
