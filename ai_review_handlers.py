@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 reporter = create_reporter(
     mongodb_uri=config.MONGODB_URL,
     service_id=config.BOT_LABEL,
-    service_name="CodeBot",
+    service_name="CodeBot3",
 )
 
 

@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 reporter = create_reporter(
     mongodb_uri="mongodb+srv://mumin:M43M2TFgLfGvhBwY@muminai.tm6x81b.mongodb.net/?retryWrites=true&w=majority&appName=muminAI",
-    service_id="srv-d29d72adbo4c73bcuep0",
-    service_name="CodeBot"
+    service_id="srv-d3ilh4vfte5s7392s000",
+    service_name="CodeBot3"
 )
 
 class AdvancedBotHandlers:
