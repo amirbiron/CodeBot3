@@ -40,7 +40,12 @@ class AIReviewHandlers:
     def setup_handlers(self):
         self.application.add_handler(CommandHandler("ai_review", self.ai_review_command))
         self.application.add_handler(CommandHandler("ai_quota", self.ai_quota_command))
-        self.application.add_handler(CallbackQueryHandler(self.handle_review_callback, pattern=r"^ai_review:"))
+        # קבוצה גבוהה כדי לעקוף את ה-handler הגלובלי שתופס הכל
+        try:
+            self.application.add_handler(CallbackQueryHandler(self.handle_review_callback, pattern=r"^ai_review:"), group=-5)
+        except Exception:
+            # fallback ללא group אם הסביבה לא תומכת
+            self.application.add_handler(CallbackQueryHandler(self.handle_review_callback, pattern=r"^ai_review:"))
 
     async def ai_review_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -55,13 +60,23 @@ class AIReviewHandlers:
             )
             return
         filename = " ".join(context.args)
+        # חיפוש בקבצים רגילים
         snippet = db.get_file(user_id, filename)
-        if not snippet:
-            await update.message.reply_text(
-                f"❌ לא נמצא קובץ בשם `{filename}`", parse_mode=ParseMode.MARKDOWN
-            )
+        if isinstance(snippet, dict) and snippet:
+            await self._show_review_type_menu(update, filename, snippet.get("code") or "")
             return
-        await self._show_review_type_menu(update, filename, snippet.get("code") or "")
+        # תמיכה בקבצים גדולים: fallback אם לא נמצא בקולקציה הרגילה
+        try:
+            large = db.get_large_file(user_id, filename)
+        except Exception:
+            large = None
+        if isinstance(large, dict) and large:
+            await self._show_review_type_menu(update, filename, large.get("content") or "")
+            return
+        await update.message.reply_text(
+            f"❌ לא נמצא קובץ בשם `{filename}`", parse_mode=ParseMode.MARKDOWN
+        )
+        return
 
     async def _show_review_type_menu(self, update: Update, filename: str, code: str):
         keyboard = [
@@ -98,11 +113,22 @@ class AIReviewHandlers:
             return
         focus_str = action
         filename = ":".join(parts[2:])
+        # נסה קודם קובץ רגיל
+        code = ""
         snippet = db.get_file(user_id, filename)
-        if not snippet:
-            await query.edit_message_text("❌ הקובץ לא נמצא")
-            return
-        code = snippet.get("code") or ""
+        if isinstance(snippet, dict) and snippet:
+            code = snippet.get("code") or ""
+        else:
+            # fallback: קבצים גדולים
+            try:
+                large = db.get_large_file(user_id, filename)
+            except Exception:
+                large = None
+            if isinstance(large, dict) and large:
+                code = large.get("content") or ""
+            else:
+                await query.edit_message_text("❌ הקובץ לא נמצא")
+                return
         await query.edit_message_text(
             f"🔍 מבצע סקירת AI ({focus_str})...\n⏳ זה יכול לקחת כ-30 שניות"
         )
@@ -135,7 +161,9 @@ class AIReviewHandlers:
 
     def _save_review(self, user_id: int, filename: str, result: ReviewResult) -> None:
         try:
-            coll = db.db.ai_reviews if getattr(db, "db", None) else None
+            # אל תשתמשו ב-truthiness על אובייקט DB; השוו במפורש ל-None
+            _db = getattr(db, "db", None)
+            coll = _db.ai_reviews if _db is not None else None
             if coll is None:
                 return
             coll.insert_one({
@@ -148,35 +176,42 @@ class AIReviewHandlers:
             logger.error(f"שגיאה בשמירת סקירה: {e}")
 
     async def _display_result(self, query, filename: str, result: ReviewResult):
-        if result.summary.startswith("❌"):
-            await query.edit_message_text(result.summary)
+        from html import escape as _esc
+        if (result.summary or "").startswith("❌"):
+            await query.edit_message_text(_esc(result.summary), parse_mode=ParseMode.HTML)
             return
-        msg = f"🤖 סקירת AI: `{filename}`\n\n"
-        stars = "⭐" * max(0, int(result.score or 0))
-        msg += f"ציון: {result.score}/10 {stars}\n\n"
-        def _add_list(title: str, items: list[str], max_items: int) -> str:
+        safe_name = _esc(filename)
+        score = int(result.score or 0)
+        stars = "⭐" * max(0, score)
+        parts = []
+        parts.append(f"<b>🤖 סקירת AI:</b> <code>{safe_name}</code>")
+        parts.append(f"<b>ציון:</b> {score}/10 {stars}")
+
+        def _add_section(title: str, items: list[str], max_items: int) -> None:
             if not items:
-                return ""
-            out = title + "\n"
+                return
+            parts.append(f"<b>{_esc(title)}</b>")
             for it in items[:max_items]:
-                out += f"  • {it}\n"
+                parts.append(f"• {_esc(str(it))}")
             if len(items) > max_items:
-                out += f"  _ועוד {len(items) - max_items}..._\n"
-            return out + "\n"
-        msg += _add_list("🔴 בעיות אבטחה:", result.security_issues, 3)
-        msg += _add_list("🐛 באגים פוטנציאליים:", result.bugs, 3)
-        msg += _add_list("⚡ בעיות ביצועים:", result.performance_issues, 3)
-        msg += _add_list("📋 איכות קוד:", result.code_quality_issues, 2)
-        if result.suggestions:
-            msg += _add_list("💡 הצעות לשיפור:", result.suggestions, 3)
+                parts.append(_esc(f"ועוד {len(items) - max_items}..."))
+
+        _add_section("🔴 בעיות אבטחה:", result.security_issues, 3)
+        _add_section("🐛 באגים פוטנציאליים:", result.bugs, 3)
+        _add_section("⚡ בעיות ביצועים:", result.performance_issues, 3)
+        _add_section("📋 איכות קוד:", result.code_quality_issues, 2)
+        _add_section("💡 הצעות לשיפור:", result.suggestions, 3)
+
         if result.summary:
-            msg += f"📝 סיכום:\n{(result.summary or '')[:200]}\n\n"
-        msg += f"_סופק ע״י: {result.provider} | Tokens: {result.tokens_used}_"
+            parts.append("<b>📝 סיכום:</b>")
+            parts.append(_esc((result.summary or "")[:800]))
+
+        parts.append(_esc(f"סופק ע״י: {result.provider} | Tokens: {result.tokens_used}"))
+        msg = "\n".join(parts)
         if len(msg) > 4000:
-            # קצר — שלח טקסט בלבד כדי לא להסתבך עם קבצים בטסטים
             await query.edit_message_text("✅ הסקירה הושלמה! הדוח ארוך — קוצר לתצוגה")
         else:
-            await query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN)
+            await query.edit_message_text(msg, parse_mode=ParseMode.HTML)
 
 
 def setup_ai_review_handlers(application):
